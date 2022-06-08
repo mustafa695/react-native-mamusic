@@ -11,6 +11,8 @@ import {
   FlatList,
   Animated,
 } from 'react-native';
+import {useDispatch, useSelector} from 'react-redux';
+import {musicAlreadyPlaying} from '../store/action';
 import Slider from '@react-native-community/slider';
 import Sound from 'react-native-sound';
 import images from '../constant/images';
@@ -32,10 +34,10 @@ const Music = ({navigation}) => {
     },
     {
       id: 2,
-      url: 'https://bit.ly/3lTcOsz',
+      url: 'https://firebasestorage.googleapis.com/v0/b/instagram-563fe.appspot.com/o/Qayamat%20Hai%20Zaalim%20Ki%20Neechi%20Nigahein%20_%20Remix%20%20_%20Nusrat%20Fateh%20Ali%20Khan%20(MP3_320K).mp3.mp3?alt=media&token=00b6b5ab-020c-433f-b2f4-7d9ad4e2f0fd',
       cover: images.musicPlay,
-      name: 'On the flooor',
-      author: 'Jennefier Lopez',
+      name: 'Qayamat Hai Zaalim...',
+      author: 'Nustrat Fathe Ali...',
     },
     {
       id: 3,
@@ -51,9 +53,14 @@ const Music = ({navigation}) => {
   const [second, setSecond] = useState(0);
   const [duration, setDuration] = useState(0);
   const [musicAlready, setMusicAlready] = useState(false);
+  const [musicPause, setMusicPause] = useState(false);
   const [index, setIndex] = useState(0);
   const width = Dimensions.get('window').width;
   const scrollX = useRef(new Animated.Value(0)).current;
+  const songSlider = useRef(null);
+
+  const dispatch = useDispatch();
+  const isAlready = useSelector(state => state);
 
   useEffect(() => {
     scrollX.addListener(({value}) => {
@@ -63,42 +70,54 @@ const Music = ({navigation}) => {
   }, []);
 
   const start = url => {
-    
+    dispatch(musicAlreadyPlaying(true));
     setMusicAlready(true);
+    setIsPlaying(true);
+
     if (!musicAlready) {
       console.log('-----Play---');
       let playMusic = new Sound(url, Sound.MAIN_BUNDLE, error => {
         if (error) {
-          console.log('failed to load the sound', error);
+          alert('failed to load the sound', error);
           return;
         }
-        playMusic.play(success => {
-          if (success) {
-            console.log('successfully finished playing');
-          } else {
-            console.log('playback failed due to audio decoding errors');
-          }
-        });
+        setTimeout(() => {
+          playMusic.play(success => {
+            if (success) {
+              console.log('successfully finished playing');
+            } else {
+              console.log('playback failed due to audio decoding errors');
+            }
+          });
+        }, 600);
         setMusic(playMusic);
         setTimeout(() => {
           setDuration(playMusic.getDuration());
         }, 500);
       });
     } else {
+      //resume music
       music.play();
     }
   };
 
   const pause = () => {
+    setIsPlaying(false);
+    setMusicPause(true);
     music.pause();
   };
+
   useEffect(() => {
     if (music) {
+      console.log('============timeoit=======');
       let id = setInterval(() => {
-        music.getCurrentTime((seconds, play) => {
-          setIsPlaying(play);
-          setSecond(seconds);
-        });
+        setTimeout(() => {
+          music.getCurrentTime((seconds, play) => {
+            if (seconds > 0) {
+              setSecond(seconds);
+            }
+          });
+        }, 500);
       }, 100);
     }
   }, [music]);
@@ -112,6 +131,44 @@ const Music = ({navigation}) => {
   useEffect(() => {
     padTo2Digits();
   }, []);
+
+  const nextSong = () => {
+    if (index !== songs.length - 1) {
+      setIndex(songs[index + 1]);
+    }
+    if (isPlaying || musicPause) {
+      music.stop(() => {
+        console.log('music has been stopped...');
+      });
+    }
+    dispatch(musicAlreadyPlaying(false));
+    setMusicAlready(false);
+    setIsPlaying(false);
+    setMusic('');
+    songSlider.current.scrollToOffset({
+      offset: (index + 1) * width,
+    });
+  };
+
+  const prevSong = () => {
+    if (index > 0) {
+      setIndex(songs[index - 1]);
+    }
+
+    if (isPlaying) {
+      music.stop(() => {
+        console.log('music has been stopped...');
+      });
+    }
+
+    setMusicAlready(false);
+    setIsPlaying(false);
+    setMusic('');
+
+    songSlider.current.scrollToOffset({
+      offset: (index - 1) * width,
+    });
+  };
 
   return (
     <View style={styles.container}>
@@ -128,7 +185,12 @@ const Music = ({navigation}) => {
         <View style={styles.iconWrapp}>
           <TouchableOpacity
             style={styles.backArrow}
-            onPress={() => navigation.navigate('Detail')}>
+            onPress={() => {
+              navigation.navigate('Detail');
+              if (isAlready || isPlaying) {
+                music.stop();
+              }
+            }}>
             <Ionicons name="arrow-back" size={22} color={colors.white} />
           </TouchableOpacity>
           <View style={styles.rightIconWrap}>
@@ -147,8 +209,10 @@ const Music = ({navigation}) => {
 
         {/* music  */}
         <Animated.FlatList
+          ref={songSlider}
           data={songs}
           horizontal={true}
+          scrollEnabled={false}
           pagingEnabled
           showsHorizontalScrollIndicator={false}
           scrollEventThrottle={16}
@@ -228,7 +292,7 @@ const Music = ({navigation}) => {
             />
           </TouchableOpacity>
           <View style={styles.centerPlay}>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={prevSong}>
               <Ionicons
                 name="play-skip-back-sharp"
                 size={24}
@@ -247,7 +311,7 @@ const Music = ({navigation}) => {
                 <Ionicons name="pause" size={26} color={colors.body} />
               </TouchableOpacity>
             )}
-            <TouchableOpacity>
+            <TouchableOpacity onPress={nextSong}>
               <Ionicons
                 name="play-skip-forward-sharp"
                 size={24}
